@@ -1,0 +1,84 @@
+name: "qwen3-32b-fp8-disagg-h200"
+
+model:
+  path: "hf:Qwen/Qwen3-32B-FP8"
+  container: "lmsysorg/sglang:v0.5.8-cu130-runtime"
+  precision: "fp8"
+
+extra_mount:
+  - "/home/bryan/.cache/huggingface:/root/.cache/huggingface"
+
+resources:
+  gpu_type: "h200"
+  gpus_per_node: 8
+  prefill_nodes: 1
+  decode_nodes: 1
+  prefill_workers: 4
+  decode_workers: 4
+  gpus_per_prefill: 2
+  gpus_per_decode: 2
+
+dynamo:
+  version: "0.8.0"
+
+frontend:
+  type: sglang 
+  enable_multiple_frontends: false
+  args:
+    policy: "cache_aware"
+
+backend:
+  type: sglang
+
+  prefill_environment:
+    SGLANG_DISAGGREGATION_HEARTBEAT_MAX_FAILURE: "100000"
+    SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT: "100000"
+    SGLANG_DISAGGREGATION_WAITING_TIMEOUT: "100000"
+    TORCH_DISTRIBUTED_DEFAULT_TIMEOUT: "1800"
+    PYTHONUNBUFFERED: "1"
+    DYN_REQUEST_PLANE: "nats"
+    HF_HOME: "/root/.cache/huggingface"
+    HF_HUB_OFFLINE: "1"
+
+  decode_environment:
+    DYN_REQUEST_PLANE: "nats"
+    SGLANG_DISAGGREGATION_HEARTBEAT_MAX_FAILURE: "100000"
+    SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT: "100000"
+    SGLANG_DISAGGREGATION_WAITING_TIMEOUT: "100000"
+    TORCH_DISTRIBUTED_DEFAULT_TIMEOUT: "1800"
+    PYTHONUNBUFFERED: "1"
+    HF_HOME: "/root/.cache/huggingface"
+    HF_HUB_OFFLINE: "1"
+
+  sglang_config:
+    prefill:
+      served-model-name: "Qwen/Qwen3-32B-FP8"
+      trust-remote-code: true
+      tensor-parallel-size: 2
+      disaggregation-mode: "prefill"
+      mem-fraction-static: 0.90
+      attention-backend: "flashinfer"
+      context-length: 32768
+      page-size: 64
+      disaggregation-transfer-backend: "nixl"
+      max-running-requests: 64
+      load-balance-method: "round_robin"
+
+    decode:
+      served-model-name: "Qwen/Qwen3-32B-FP8"
+      trust-remote-code: true
+      tensor-parallel-size: 2
+      disaggregation-mode: "decode"
+      mem-fraction-static: 0.90
+      attention-backend: "flashinfer"
+      context-length: 32768
+      page-size: 64
+      disaggregation-transfer-backend: "nixl"
+      max-running-requests: 64
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  concurrencies: "16x32x64"
+  req_rate: "inf"
